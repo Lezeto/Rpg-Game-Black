@@ -45,6 +45,8 @@ const Game = () => {
 
   const [missionResult, setMissionResult] = useState("");
   const [draggedItem, setDraggedItem] = useState(null);
+  const [easyMissionCooldown, setEasyMissionCooldown] = useState(0);
+  const [hardMissionCooldown, setHardMissionCooldown] = useState(0);
 
   useEffect(() => {
     const healInterval = setInterval(() => {
@@ -56,6 +58,26 @@ const Game = () => {
 
     return () => clearInterval(healInterval);
   }, []);
+
+  useEffect(() => {
+    const easyCooldownInterval = setInterval(() => {
+      if (easyMissionCooldown > 0) {
+        setEasyMissionCooldown((prev) => prev - 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(easyCooldownInterval);
+  }, [easyMissionCooldown]);
+
+  useEffect(() => {
+    const hardCooldownInterval = setInterval(() => {
+      if (hardMissionCooldown > 0) {
+        setHardMissionCooldown((prev) => prev - 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(hardCooldownInterval);
+  }, [hardMissionCooldown]);
 
   const gainExp = (exp) => {
     let newExp = character.exp + exp;
@@ -81,14 +103,22 @@ const Game = () => {
   };
 
   const goOnMission = () => {
+    if (easyMissionCooldown > 0) return;
+
     const isSuccess = Math.random() < 0.7; // 70% chance of success
     if (isSuccess) {
       const reward = Math.random();
       let newItem = "";
-      if (reward < 0.2) newItem = "Potion";
-      else if (reward < 0.4) newItem = "Sword";
-      else if (reward < 0.6) newItem = "Shield";
-      else newItem = "Nothing";
+      if (reward < 0.1) newItem = "Potion";
+      else if (reward < 0.2) newItem = "Sword";
+      else if (reward < 0.3) newItem = "Shield";
+      else if (reward < 0.4) newItem = "Helmet";
+      else if (reward < 0.5) newItem = "Armor";
+      else if (reward < 0.6) newItem = "Legs";
+      else if (reward < 0.7) newItem = "Boots";
+      else if (reward < 0.8) newItem = "Wand";
+      else if (reward < 0.9) newItem = "Ring";
+      else newItem = "Book";
 
       setCharacter((prev) => ({
         ...prev,
@@ -105,16 +135,31 @@ const Game = () => {
       }));
       setMissionResult("Mission Failed! You lost 30 HP.");
     }
+
+    setEasyMissionCooldown(5); // 5-second cooldown
   };
 
   const goOnHardMission = () => {
+    if (hardMissionCooldown > 0) return;
+
     const isSuccess = Math.random() < 0.3; // 30% chance of success
     if (isSuccess) {
+      const reward = Math.random();
+      let newItem = "";
+      if (reward < 0.2) newItem = "Armor";
+      else if (reward < 0.4) newItem = "Helmet";
+      else if (reward < 0.6) newItem = "Legs";
+      else if (reward < 0.8) newItem = "Boots";
+      else newItem = "Gem";
+
       setCharacter((prev) => ({
         ...prev,
-        equipment: { ...prev.equipment, armor: "Armor" },
+        goldCoins: prev.goldCoins + 20,
+        inventory: newItem !== "Nothing" ? [...prev.inventory, newItem] : prev.inventory,
       }));
-      setMissionResult("Hard Mission Success! You gained an armor (+10 Strength).");
+
+      gainExp(100);
+      setMissionResult(`Hard Mission Success! You gained 20 gold coins and ${newItem}.`);
     } else {
       setCharacter((prev) => ({
         ...prev,
@@ -122,6 +167,8 @@ const Game = () => {
       }));
       setMissionResult("Hard Mission Failed! You lost 60 HP.");
     }
+
+    setHardMissionCooldown(20); // 20-second cooldown
   };
 
   const useItem = (item) => {
@@ -166,6 +213,9 @@ const Game = () => {
       Boots: ["boots"],
       Sword: ["leftHand", "rightHand"],
       Shield: ["leftHand", "rightHand"],
+      Wand: ["leftHand", "rightHand"],
+      Ring: ["leftHand", "rightHand"],
+      Book: ["leftHand", "rightHand"],
     };
 
     return validSlots[item]?.includes(slot);
@@ -178,6 +228,13 @@ const Game = () => {
   const handleDrop = (e, slot) => {
     e.preventDefault();
     if (draggedItem && isValidSlot(draggedItem, slot)) {
+      // Unequip the item from its current slot if it's already equipped
+      const currentSlot = Object.keys(character.equipment).find(
+        (key) => character.equipment[key] === draggedItem
+      );
+      if (currentSlot) {
+        unequipItem(currentSlot);
+      }
       equipItem(draggedItem, slot);
       setDraggedItem(null);
     }
@@ -195,14 +252,22 @@ const Game = () => {
         return espadaImg;
       case "Shield":
         return cascoImg;
-      case "Armor":
-        return armorImg;
       case "Helmet":
         return sombreroImg;
+      case "Armor":
+        return armorImg;
       case "Legs":
         return legsImg;
       case "Boots":
         return capaImg;
+      case "Wand":
+        return varitaImg;
+      case "Ring":
+        return anilloImg;
+      case "Book":
+        return libroImg;
+      case "Gem":
+        return gemaImg;
       default:
         return null;
     }
@@ -220,13 +285,14 @@ const Game = () => {
 
   return (
     <div className="game-container">
-      <h1>Character RPG Game</h1>
       <div className="main-content">
         <div className="left-panel">
           <div className="character-section">
             <img src={characterImg} alt="Character" className="character-image" />
             <div className="stats">
+              <h1>Character Game</h1>
               <h2>Stats</h2>
+              <p>Level: {character.level}</p>
               <div className="stat-row">
                 <p>HP: {character.hp} / {character.maxHp}</p>
                 <div className="bar hp-bar">
@@ -278,7 +344,19 @@ const Game = () => {
               <p>Stat Points: {character.statPoints}</p>
             </div>
           </div>
-          <div className="equipment-section">
+          <div className="missions-section">
+            <h2>Missions</h2>
+            <button onClick={goOnMission} disabled={easyMissionCooldown > 0}>
+              Go on Mission {easyMissionCooldown > 0 ? `(${easyMissionCooldown}s)` : ""}
+            </button>
+            <button onClick={goOnHardMission} disabled={hardMissionCooldown > 0}>
+              Go on Hard Mission {hardMissionCooldown > 0 ? `(${hardMissionCooldown}s)` : ""}
+            </button>
+            <p>{missionResult}</p>
+          </div>
+        </div>
+        <div className="right-panel">
+        <div className="equipment-section">
             <h2>Equipment</h2>
             <div className="equipment-grid">
               <div className="equipment-slot helmet" onDrop={(e) => handleDrop(e, "helmet")} onDragOver={handleDragOver}>
@@ -361,18 +439,10 @@ const Game = () => {
               </div>
             </div>
           </div>
-          <div className="missions-section">
-            <h2>Missions</h2>
-            <button onClick={goOnMission}>Go on Mission</button>
-            <button onClick={goOnHardMission}>Go on Hard Mission</button>
-            <p>{missionResult}</p>
-          </div>
-        </div>
-        <div className="right-panel">
           <div className="inventory-section">
             <h2>Inventory (8x4)</h2>
             <div className="inventory-grid">
-              {Array.from({ length: 32 }).map((_, index) => (
+              {Array.from({ length: 20 }).map((_, index) => (
                 <div key={index} className="inventory-slot">
                   {character.inventory[index] && (
                     <img
